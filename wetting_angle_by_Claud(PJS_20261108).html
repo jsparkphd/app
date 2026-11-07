@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>접촉각 측정기</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f6f9;--fg:#1c2230;--card:#fff;--bd:#d6dbe4;--ac:#2563eb;--mut:#5d6677}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#13161c;--fg:#e6e9ef;--card:#1c212a;--bd:#343b47;--ac:#6ea0ff;--mut:#9aa3b2}}
+:root[data-theme="dark"]{--bg:#13161c;--fg:#e6e9ef;--card:#1c212a;--bd:#343b47;--ac:#6ea0ff;--mut:#9aa3b2}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+.w{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+button,label.b{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+button.p,label.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+#st{padding:10px 12px;border-left:4px solid var(--ac);background:var(--card);border-radius:6px;margin-bottom:10px}
+#box{background:var(--card);border:2px dashed var(--bd);border-radius:10px;padding:6px;text-align:center;min-height:200px;overflow:auto;max-height:78vh}
+canvas{max-width:100%;height:auto;cursor:crosshair;touch-action:manipulation}
+#tbar{overflow-x:auto;overflow-y:hidden;display:none;margin:0 2px 2px}#tin{height:1px}
+.r{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
+.r div{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 12px}
+.r small{color:var(--mut);display:block}.r b{font-size:18px}
+.big b{font-size:26px;color:var(--ac)}
+.o{display:flex;align-items:center;gap:8px;color:var(--mut)}
+</style></head><body><div class="w">
+<h1>물방울 접촉각 측정기</h1>
+<div id="fn" style="font-weight:600;word-break:break-all;margin-bottom:4px"></div>
+<div class="o">이미지 파일을 선택하거나 아래 영역에 끌어다 놓으세요. 이미지는 브라우저 안에서만 처리됩니다.</div>
+<div class="bar">
+<label class="b p">이미지 불러오기<input id="f" type="file" accept="image/*" hidden></label>
+<button id="bB">베이스라인 다시</button>
+<button id="bU">마지막 점 취소</button>
+<button id="bP">점 초기화</button>
+<button id="bS">PNG 저장</button>
+<span class="o"><button id="zi">＋</button><button id="zo">－</button><button id="zf">화면 맞춤</button><button id="z1">100%</button><span id="zl">–</span></span>
+<span class="o"><button id="rl">⟲ 왼쪽 90°</button><button id="rr">⟳ 오른쪽 90°</button></span>
+<span class="o">보정 반경 <input id="rad" type="range" min="4" max="60" value="18"> <span id="rv">18</span>px</span>
+</div>
+<div class="bar o">표시:
+<label><input type="checkbox" class="v" id="vB" checked> 베이스라인</label>
+<label><input type="checkbox" class="v" id="vP" checked> 선택 점</label>
+<label><input type="checkbox" class="v" id="vC" checked> fitting 원</label>
+<label><input type="checkbox" class="v" id="vT" checked> 접선·각도 호</label>
+<label><input type="checkbox" class="v" id="vA" checked> 각도값</label>
+<label>선 두께 <input type="range" id="lwk" min="0.3" max="4" step="0.1" value="1"> <span id="lwv">1.0×</span></label>
+<button id="bT" class="p">800×800 변환 (원 지름 400px)</button></div>
+<div id="st">이미지를 불러오세요.</div>
+<div id="tbar"><div id="tin"></div></div>
+<div id="box"><canvas id="c" width="10" height="10"></canvas></div>
+<div class="r">
+<div class="big"><small>접촉각 θ</small><b id="o1">–</b></div>
+<div><small>원 중심 (px)</small><b id="o2">–</b></div>
+<div><small>반지름 (px)</small><b id="o3">–</b></div>
+<div><small>fitting 잔차 RMS (px)</small><b id="o4">–</b></div>
+<div><small>베이스라인 기울기</small><b id="o5">–</b></div>
+</div>
+</div>
+<script>
+const $=id=>document.getElementById(id),cv=$('c'),ctx=cv.getContext('2d');
+let img=null,W=0,H=0,mag=null,base=[],raw=[],pts=[],fit=null;
+const st=t=>$('st').textContent=t;
+$('rad').oninput=e=>$('rv').textContent=e.target.value;
+function load(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  const im=new Image();
+  im.onload=()=>{$('fn').textContent='파일: '+file.name;fname=file.name;std=false;img=im;W=im.naturalWidth;H=im.naturalHeight;cv.width=W;cv.height=H;grad();reset(true);fitZoom()};
+  im.src=URL.createObjectURL(file);
+}
+$('f').onchange=e=>load(e.target.files[0]);
+const bx=$('box');
+let zoom=1,fname='',std=false;
+const baseW=()=>Math.min(W,bx.clientWidth-16);
+function zlab(){
+  $('zl').textContent=Math.round(cv.getBoundingClientRect().width/W*100)+'%';
+  const tb=$('tbar');tb.style.width=bx.clientWidth+'px';$('tin').style.width=bx.scrollWidth+'px';
+  tb.style.display=bx.scrollWidth>bx.clientWidth+1?'block':'none';tb.scrollLeft=bx.scrollLeft;
+}
+$('tbar').addEventListener('scroll',()=>{if(bx.scrollLeft!==$('tbar').scrollLeft)bx.scrollLeft=$('tbar').scrollLeft});
+bx.addEventListener('scroll',()=>{if($('tbar').scrollLeft!==bx.scrollLeft)$('tbar').scrollLeft=bx.scrollLeft});
+window.addEventListener('resize',()=>{if(img)zlab()});
+function fitZoom(){zoom=1;cv.style.maxWidth='none';cv.style.width=baseW()+'px';bx.scrollLeft=bx.scrollTop=0;zlab()}
+function setZoom(z,cx,cy){
+  if(!img)return;z=Math.max(.25,Math.min(16,z));
+  const r=cv.getBoundingClientRect(),b=bx.getBoundingClientRect();
+  if(cx==null){cx=b.left+b.width/2;cy=b.top+b.height/2}
+  const fx=(cx-r.left)/r.width,fy=(cy-r.top)/r.height;
+  zoom=z;cv.style.maxWidth='none';cv.style.width=baseW()*z+'px';
+  const r2=cv.getBoundingClientRect();
+  bx.scrollLeft+=r2.left+fx*r2.width-cx;bx.scrollTop+=r2.top+fy*r2.height-cy;zlab();
+}
+$('zi').onclick=()=>setZoom(zoom*1.25);
+$('zo').onclick=()=>setZoom(zoom/1.25);
+$('zf').onclick=fitZoom;
+$('z1').onclick=()=>setZoom(W/baseW());
+bx.addEventListener('wheel',e=>{if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();setZoom(zoom*(e.deltaY<0?1.15:1/1.15),e.clientX,e.clientY)},{passive:false});
+['dragenter','dragover'].forEach(t=>window.addEventListener(t,e=>{e.preventDefault();bx.style.borderColor='var(--ac)'}));
+window.addEventListener('dragleave',e=>{if(!e.relatedTarget)bx.style.borderColor=''});
+window.addEventListener('drop',e=>{e.preventDefault();bx.style.borderColor='';const f=[...e.dataTransfer.files].find(x=>x.type.startsWith('image/'));if(f)load(f)});
+
+function grad(){
+  const o=document.createElement('canvas');o.width=W;o.height=H;
+  const c=o.getContext('2d');c.drawImage(img,0,0);
+  const d=c.getImageData(0,0,W,H).data,g=new Float32Array(W*H),b=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++)g[i]=.299*d[4*i]+.587*d[4*i+1]+.114*d[4*i+2];
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){let s=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)s+=g[(y+j)*W+x+i];b[y*W+x]=s/9}
+  mag=new Float32Array(W*H);
+  for(let y=2;y<H-2;y++)for(let x=2;x<W-2;x++){
+    const k=y*W+x,
+    gx=-b[k-W-1]-2*b[k-1]-b[k+W-1]+b[k-W+1]+2*b[k+1]+b[k+W+1],
+    gy=-b[k-W-1]-2*b[k-W]-b[k-W+1]+b[k+W-1]+2*b[k+W]+b[k+W+1];
+    mag[k]=Math.hypot(gx,gy);
+  }
+}
+function toStd(){
+  if(!fit){st('먼저 5점 fitting을 완료하세요.');return}
+  const S=800,s=200/fit.r,c=fit.c,o=document.createElement('canvas');o.width=o.height=S;
+  const g=o.getContext('2d');g.fillStyle='#808080';g.fillRect(0,0,S,S);
+  g.imageSmoothingQuality='high';let ph=Math.atan2(fit.u.y,fit.u.x);if(ph>Math.PI/2)ph-=Math.PI;if(ph<-Math.PI/2)ph+=Math.PI;const co=Math.cos(ph),si=Math.sin(ph),dd=(c.x-base[0].x)*fit.n.x+(c.y-base[0].y)*fit.n.y,ty0=S/2+s*dd*(-fit.n.x*si+fit.n.y*co);g.setTransform(s*co,-s*si,s*si,s*co,S/2-s*(co*c.x+si*c.y),ty0-s*(-si*c.x+co*c.y));g.drawImage(img,0,0);
+  const m=p=>{const dx=p.x-c.x,dy=p.y-c.y;return{x:s*(dx*co+dy*si)+S/2,y:s*(-dx*si+dy*co)+ty0}};
+  base=base.map(m);raw=raw.map(m);pts=pts.map(m);
+  img=o;W=H=S;std=true;cv.width=W;cv.height=H;grad();fitZoom();calc();
+  st('800×800 변환 완료: 베이스라인 중앙(y=400), 원 지름 400px, 수평 보정(회전 '+(-ph*180/Math.PI).toFixed(2)+'°)');
+}
+$('bT').onclick=toStd;
+document.querySelectorAll('.v').forEach(e=>e.onchange=draw);
+$('lwk').oninput=()=>{$('lwv').textContent=(+$('lwk').value).toFixed(1)+'×';draw()};
+function rot(dir){
+  if(!img)return;
+  const o=document.createElement('canvas');o.width=H;o.height=W;
+  const c=o.getContext('2d');c.translate(H/2,W/2);c.rotate(dir*Math.PI/2);c.drawImage(img,-W/2,-H/2);
+  img=o;[W,H]=[H,W];cv.width=W;cv.height=H;
+  grad();reset(true);fitZoom();
+}
+$('rl').onclick=()=>rot(-1);
+$('rr').onclick=()=>rot(1);
+function reset(all){
+  raw=[];pts=[];fit=null;if(all)base=[];
+  ['o1','o2','o3','o4','o5'].forEach(i=>$(i).textContent='–');
+  msg();draw();
+}
+function msg(){
+  if(!img)return st('이미지를 불러오세요.');
+  if(base.length<2)return st('① 베이스라인: 기판 표면 위 두 점(좌, 우)을 클릭하세요. ('+base.length+'/2)');
+  if(pts.length<5)return st('② 물방울 곡면(경계선) 근처를 클릭하세요. 경계선으로 자동 보정됩니다. ('+pts.length+'/5)');
+  st('완료. 점을 더 정확히 잡으려면 “마지막 점 취소” 또는 “점 초기화”를 사용하세요.');
+}
+$('bB').onclick=()=>{base=[];raw=[];pts=[];fit=null;msg();draw()};
+$('bP').onclick=()=>{reset(false)};
+$('bU').onclick=()=>{if(pts.length){pts.pop();raw.pop();fit=null;msg();draw();calc()}else if(base.length){base.pop();msg();draw()}};
+$('bS').onclick=()=>{if(!img)return;const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download='contact_angle.png';a.click()};
+function frame(){ // baseline unit vectors, n points up (screen)
+  const [A,B]=base;let L=Math.hypot(B.x-A.x,B.y-A.y)||1,u={x:(B.x-A.x)/L,y:(B.y-A.y)/L},n={x:-u.y,y:u.x};
+  if(n.y>0)n={x:-n.x,y:-n.y};return{A,u,n};
+}
+function snap(x,y){
+  const R=+$('rad').value,{A,n}=frame();let best=-1,bx=x,by=y;
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+    const d2=dx*dx+dy*dy;if(d2>R*R)continue;
+    const px=Math.round(x+dx),py=Math.round(y+dy);
+    if(px<2||py<2||px>=W-2||py>=H-2)continue;
+    if((px-A.x)*n.x+(py-A.y)*n.y<2)continue; // 베이스라인 아래 제외
+    const s=mag[py*W+px]*(1-.5*d2/(R*R));
+    if(s>best){best=s;bx=px;by=py}
+  }
+  return{x:bx,y:by};
+}
+cv.addEventListener('click',e=>{
+  if(!img)return;
+  const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;
+  if(base.length<2){base.push({x,y})}
+  else if(pts.length<5){raw.push({x,y});pts.push(snap(x,y))}
+  else return;
+  msg();draw();if(pts.length===5)calc();
+});
+function solve(M,v){ // 3x3 gaussian
+  const a=M.map((r,i)=>[...r,v[i]]);
+  for(let i=0;i<3;i++){let p=i;for(let j=i+1;j<3;j++)if(Math.abs(a[j][i])>Math.abs(a[p][i]))p=j;[a[i],a[p]]=[a[p],a[i]];
+    for(let j=i+1;j<3;j++){const f=a[j][i]/a[i][i];for(let k=i;k<4;k++)a[j][k]-=f*a[i][k]}}
+  const s=[0,0,0];for(let i=2;i>=0;i--){let t=a[i][3];for(let k=i+1;k<3;k++)t-=a[i][k]*s[k];s[i]=t/a[i][i]}return s;
+}
+function calc(){
+  if(pts.length<5)return;
+  const mx=pts.reduce((s,p)=>s+p.x,0)/5,my=pts.reduce((s,p)=>s+p.y,0)/5;
+  const M=[[0,0,0],[0,0,0],[0,0,0]],v=[0,0,0];
+  for(const p of pts){const x=p.x-mx,y=p.y-my,q=[x,y,1],z=-(x*x+y*y);
+    for(let i=0;i<3;i++){v[i]+=q[i]*z;for(let j=0;j<3;j++)M[i][j]+=q[i]*q[j]}}
+  const [D,E,F]=solve(M,v);
+  const cx=-D/2,cy=-E/2,r2=cx*cx+cy*cy-F;
+  if(!(r2>0)||!isFinite(r2)){st('원 fitting에 실패했습니다. 점을 다시 선택하세요.');fit=null;draw();return}
+  const r=Math.sqrt(r2),c={x:cx+mx,y:cy+my},{A,u,n}=frame();
+  let d=(c.x-A.x)*n.x+(c.y-A.y)*n.y; // 중심의 부호 있는 높이(물방울 쪽 +)
+  // 물방울 쪽(점들의 평균) 확인
+  const side=((mx-A.x)*n.x+(my-A.y)*n.y);if(side<0){/* 아래쪽 물방울: n 뒤집기 */n.x*=-1;n.y*=-1;d=-d}
+  if(Math.abs(d)>=r){st('원이 베이스라인과 만나지 않습니다. 점을 다시 선택하세요.');fit=null;draw();return}
+  const h=Math.sqrt(r*r-d*d),theta=Math.acos(-d/r)*180/Math.PI;
+  const F0={x:c.x-d*n.x,y:c.y-d*n.y};
+  const P1={x:F0.x-h*u.x,y:F0.y-h*u.y},P2={x:F0.x+h*u.x,y:F0.y+h*u.y};
+  const t1={x:(-d*u.x+h*n.x)/r,y:(-d*u.y+h*n.y)/r},t2={x:(d*u.x+h*n.x)/r,y:(d*u.y+h*n.y)/r};
+  let ss=0;for(const p of pts)ss+=(Math.hypot(p.x-c.x,p.y-c.y)-r)**2;
+  fit={c,r,u,n,P1,P2,t1,t2,theta,rms:Math.sqrt(ss/5)};
+  $('o1').textContent=theta.toFixed(2)+'°';
+  $('o2').textContent='('+c.x.toFixed(1)+', '+c.y.toFixed(1)+')';
+  $('o3').textContent=r.toFixed(2);
+  $('o4').textContent=fit.rms.toFixed(3);
+  {let a=Math.atan2(u.y,u.x)*180/Math.PI;if(a>90)a-=180;if(a<-90)a+=180;$('o5').textContent=(Math.abs(a)<.005?0:a).toFixed(2)+'°'}
+  draw();
+}
+function line(a,b){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
+function draw(){
+  if(!img)return;
+  ctx.clearRect(0,0,W,H);ctx.drawImage(img,0,0);
+  if(std&&fname){const f=Math.max(10,W/70);ctx.save();ctx.font=f+'px sans-serif';ctx.textAlign='center';ctx.lineJoin='round';ctx.lineWidth=f/4;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(fname,W/2,H-f*.5,W-20);ctx.fillStyle='#fff';ctx.fillText(fname,W/2,H-f*.5,W-20);ctx.restore()}
+  const lw=Math.max(1,W/1000)*(+$('lwk').value),pr=Math.max(2,W/420);ctx.lineWidth=lw;
+  if(base.length&&$('vB').checked){
+    ctx.fillStyle='#22d3ee';ctx.strokeStyle='#22d3ee';
+    base.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,pr,0,7);ctx.fill()});
+    if(base.length===2){const f=frame(),L=W+H;line({x:f.A.x-f.u.x*L,y:f.A.y-f.u.y*L},{x:f.A.x+f.u.x*L,y:f.A.y+f.u.y*L})}
+  }
+  const sp=$('vP').checked;
+  if(sp)raw.forEach((p,i)=>{
+    ctx.strokeStyle='#fde047';ctx.beginPath();ctx.arc(p.x,p.y,pr,0,7);ctx.stroke();
+    ctx.strokeStyle='rgba(253,224,71,.6)';line(p,pts[i]);
+  });
+  ctx.fillStyle='#ef4444';if(sp)pts.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,pr*.8,0,7);ctx.fill()});
+  if(!fit)return;
+  const {c,r,u,n,P1,P2,t1,t2,theta}=fit,L=W+H;
+  ctx.save();ctx.beginPath(); // 베이스라인 위쪽 반평면만 원 그리기
+  const A=base[0];ctx.moveTo(A.x-u.x*L,A.y-u.y*L);ctx.lineTo(A.x+u.x*L,A.y+u.y*L);
+  ctx.lineTo(A.x+u.x*L+n.x*L,A.y+u.y*L+n.y*L);ctx.lineTo(A.x-u.x*L+n.x*L,A.y-u.y*L+n.y*L);ctx.closePath();ctx.clip();
+  if($('vC').checked){ctx.strokeStyle='#4ade80';ctx.beginPath();ctx.arc(c.x,c.y,r,0,7);ctx.stroke()}ctx.restore();
+  const tl=W*.13,vt=$('vT').checked;ctx.strokeStyle='#f97316';ctx.lineWidth=lw*1.2;
+  if(vt)[[P1,t1],[P2,t2]].forEach(([P,t])=>line({x:P.x-t.x*tl*.35,y:P.y-t.y*tl*.35},{x:P.x+t.x*tl,y:P.y+t.y*tl}));
+  // 각도 호
+  ctx.strokeStyle='#f0abfc';ctx.lineWidth=lw;const ar=W*.045;
+  if(vt)[[P1,u,t1],[P2,{x:-u.x,y:-u.y},t2]].forEach(([P,a,t])=>{
+    const cr=a.x*t.y-a.y*t.x;ctx.beginPath();ctx.arc(P.x,P.y,ar,Math.atan2(a.y,a.x),Math.atan2(t.y,t.x),cr<0);ctx.stroke()});
+  ctx.fillStyle='#f97316';if(vt)[P1,P2].forEach(P=>{ctx.beginPath();ctx.arc(P.x,P.y,pr,0,7);ctx.fill()});
+  const fs=Math.max(16,W/30);ctx.font='bold '+fs+'px sans-serif';ctx.textAlign='center';ctx.lineJoin='round';
+  const tx=std?W/2:c.x,ty=std?H-Math.max(10,W/70)*2.4:Math.max(fs*1.1,c.y-r-fs*2.5);
+  if(!$('vA').checked)return;ctx.lineWidth=fs/6;ctx.strokeStyle='#000';ctx.strokeText('θ = '+theta.toFixed(2)+'°',tx,ty);
+  ctx.fillStyle='#fff';ctx.fillText('θ = '+theta.toFixed(2)+'°',tx,ty);
+}
+</script></body></html>
