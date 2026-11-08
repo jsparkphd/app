@@ -209,7 +209,7 @@ function line(a,b){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.s
 function draw(){
   if(!img)return;
   ctx.clearRect(0,0,W,H);ctx.drawImage(img,0,0);
-  if(std&&fname){const f=Math.max(10,W/70);ctx.save();ctx.font=f+'px sans-serif';ctx.textAlign='center';ctx.lineJoin='round';ctx.lineWidth=f/4;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(fname,W/2,H-f*.5,W-20);ctx.fillStyle='#fff';ctx.fillText(fname,W/2,H-f*.5,W-20);ctx.restore()}
+  if(std&&fname){const f=Math.max(15,W/46.7);ctx.save();ctx.font=f+'px sans-serif';ctx.textAlign='center';ctx.lineJoin='round';ctx.lineWidth=f/4;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(fname,W/2,H-f*.5,W-20);ctx.fillStyle='#fff';ctx.fillText(fname,W/2,H-f*.5,W-20);ctx.restore()}
   const lw=Math.max(1,W/1000)*(+$('lwk').value),pr=Math.max(2,W/420);ctx.lineWidth=lw;
   if(base.length&&$('vB').checked){
     ctx.fillStyle='#22d3ee';ctx.strokeStyle='#22d3ee';
@@ -236,8 +236,11 @@ function draw(){
     const cr=a.x*t.y-a.y*t.x;ctx.beginPath();ctx.arc(P.x,P.y,ar,Math.atan2(a.y,a.x),Math.atan2(t.y,t.x),cr<0);ctx.stroke()});
   ctx.fillStyle='#f97316';if(vt)[P1,P2].forEach(P=>{ctx.beginPath();ctx.arc(P.x,P.y,pr,0,7);ctx.fill()});
   const fs=Math.max(16,W/30);ctx.font='bold '+fs+'px sans-serif';ctx.textAlign='center';ctx.lineJoin='round';
-  const tx=std?W/2:c.x,ty=std?H-Math.max(10,W/70)*2.4:Math.max(fs*1.1,c.y-r-fs*2.5);
+  const ang='θ = '+theta.toFixed(2)+'°',ex='중심 ('+c.x.toFixed(1)+', '+c.y.toFixed(1)+')  RMS '+fit.rms.toFixed(3)+' px',f2=fs*.55;
+  const w1=ctx.measureText(ang).width;ctx.font=f2+'px sans-serif';const w2=std?ctx.measureText(ex).width:0;ctx.font='bold '+fs+'px sans-serif';
+  const tx=std?(W-w1-14-w2)/2+w1/2:c.x,ty=std?H-Math.max(15,W/46.7)*2.4:Math.max(fs*1.1,c.y-r-fs*2.5);
   if(!$('vA').checked)return;ctx.lineWidth=fs/6;ctx.strokeStyle='#000';ctx.strokeText('θ = '+theta.toFixed(2)+'°',tx,ty);
   ctx.fillStyle='#fff';ctx.fillText('θ = '+theta.toFixed(2)+'°',tx,ty);
+  if(std){ctx.textAlign='left';ctx.font=f2+'px sans-serif';const xx=tx+w1/2+14;ctx.lineWidth=f2/4;ctx.strokeStyle='#000';ctx.strokeText(ex,xx,ty);ctx.fillStyle='#fff';ctx.fillText(ex,xx,ty)}
 }
 </script></body></html>
